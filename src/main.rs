@@ -1,14 +1,13 @@
 use std::{fs, io};
 // use std::boxed::Box;
 // use std::error::Error as StdError;
-use gltf::*;
 use noobwerkz::serialized_model::*;
 
 fn traverse_node_recursive(
     node: &gltf::Node,
     meshes: &mut Vec<SerializedMesh>,
     materials: &mut Vec<SerializedMaterial>,
-    buffers: &Vec<Data>,
+    buffers: &Vec<gltf::buffer::Data>,
 ) {
     // Process the current node (e.g., access its mesh, transform, etc.)
     // ...
@@ -20,11 +19,12 @@ fn traverse_node_recursive(
         for p in prims {
             let mode = p.mode();
             match mode {
-                Points => {}
-                Lines => {}
-                LineLoop => {}
-                LineStrip => {}
-                Triangles => {
+                gltf::mesh::Mode::Points => {}
+                gltf::mesh::Mode::Lines => {}
+                gltf::mesh::Mode::LineLoop => {}
+                gltf::mesh::Mode::LineStrip => {}
+                gltf::mesh::Mode::Triangles => {
+                    let mut serialized_mesh = noobwerkz::serialized_model::SerializedMesh::new();
                     let reader = p.reader(|buffer| Some(&buffers[buffer.index()]));
                     if let Some(positions) = reader.read_positions() {
                         for p in positions {
@@ -37,14 +37,22 @@ fn traverse_node_recursive(
 
                         }
                     }
+                    if let Some(uvs) = reader.read_tex_coords(0) {
+                        for u in uvs.into_f32() {
+
+                        }
+                    }
+                    if let Some(bone_indices) = reader.read_joints(0) {
+                        for bi in bone_indices.into_u16() {}
+                    }
                     if let Some(weights) = reader.read_weights(0) {
                         for w in weights.into_f32() {
 
                         }
                     }
                 }
-                TriangleStrip => {}
-                TriangleFan => {}
+               gltf::mesh::Mode:: TriangleStrip => {}
+            gltf::mesh::Mode::TriangleFan => {}
             }
         }
     }
@@ -56,7 +64,7 @@ fn traverse_node_recursive(
 }
 
 fn run(path: &str) {
-    let file = fs::File::open(path)?;
+    let file = fs::File::open(path);
     // let reader = io::BufReader::new(file);
     let (document, buffers, images) = gltf::import(path).unwrap();
     // println!("{:#?}", gltf);
@@ -72,7 +80,7 @@ fn run(path: &str) {
             &r,
             &mut serialized_meshes,
             &mut serialized_materials,
-            buffers,
+            &buffers,
         );
     }
 }
