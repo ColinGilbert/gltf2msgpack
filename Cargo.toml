@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 gltf = "1.4.1"
 msgpacker = "0.4.8"
+noobwerkz = { git = "https://www.github.com/colingilbert/noobwerkz-ng" }

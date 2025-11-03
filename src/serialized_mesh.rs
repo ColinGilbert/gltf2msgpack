@@ -1,3 +1,6 @@
+use msgpacker::*;
+
+
 #[derive(Debug, PartialEq)]
 pub struct SerializedMesh {
     pub name: String,
@@ -55,7 +58,7 @@ impl SerializedMaterial {
 }
 
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq)]
 pub struct SerializedModel {
     pub meshes: Vec<SerializedMesh>,
     pub materials: Vec<SerializedMaterial>,
