@@ -1,4 +1,5 @@
-use std::{cmp, fs, io};
+use msgpacker::prelude::*;
+use std::{cmp, fs::*, io::*};
 // use std::boxed::Box;
 // use std::error::Error as StdError;
 use noobwerkz::serialized_model::*;
@@ -113,7 +114,7 @@ fn traverse_node_recursive(
 }
 
 fn run(path: &str) {
-    let file = fs::File::open(path);
+    //let file = fs::File::open(path);
     // let reader = io::BufReader::new(file);
     let (document, buffers, images) = gltf::import(path).unwrap();
     // println!("{:#?}", gltf);
@@ -138,10 +139,12 @@ fn run(path: &str) {
                 .expect("Texture not found");
             //println!("Texture name {}", texture.name().unwrap_or_default());
             //let tex = document.textures().nth(tex_data.index()).expect("texture not found");//.ok_or("texture not found");
-            let image = texture.source();
-            match image.source() {
+            let img = texture.source();
+            match img.source() {
                 gltf::image::Source::View { view, mime_type } => {
                     println!("Embedded diffuse texture MIME type: {}", mime_type);
+                    // TODO: Find out if correct
+                    let _image_data = &images[view.index()].pixels;
                 }
                 gltf::image::Source::Uri { uri, mime_type } => {
                     println!(
@@ -160,6 +163,7 @@ fn run(path: &str) {
             match image.source() {
                 gltf::image::Source::View { view, mime_type } => {
                     println!("Embedded normal texture MIME type: {}", mime_type);
+                    // let image_data = &images[source.index()].pixels;
                 }
                 gltf::image::Source::Uri { uri, mime_type } => {
                     println!(
@@ -176,7 +180,14 @@ fn run(path: &str) {
     let mut serialized_model = noobwerkz::serialized_model::SerializedModel::new();
     serialized_model.meshes = serialized_meshes;
     serialized_model.materials = serialized_materials;
-    
+    let mut buf = Vec::new();
+    let n = serialized_model.pack(&mut buf);
+    let mut file = File::create("model.bin").unwrap();
+    let results = file.write_all(&buf);
+    match results {
+        Ok(data)=> { println!("Writing file", data)}
+        Err(e) => { println!("Error writing file: {}", e)}
+    }
 }
 
 fn main() {
