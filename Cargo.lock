@@ -1309,6 +1309,8 @@ dependencies = [
 name = "gltf2msgpack"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "glam 0.30.9",
  "gltf",
  "msgpacker",
  "noobwerkz",
@@ -1954,7 +1956,7 @@ dependencies = [
 [[package]]
 name = "noobwerkz"
 version = "0.0.1"
-source = "git+https://www.github.com/colingilbert/noobwerkz-ng#781482f803156e7a1ec13ee2a15ba7c34585fcaa"
+source = "git+https://www.github.com/colingilbert/noobwerkz-ng#91d0bbae05aa2ecb3342d1307c6cbf12c521d179"
 dependencies = [
  "anyhow",
  "bitmask-enum",
@@ -2297,9 +2299,9 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "orbclient"
-version = "0.3.48"
+version = "0.3.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba0b26cec2e24f08ed8bb31519a9333140a6599b867dac464bb150bdb796fd43"
+checksum = "247ad146e19b9437f8604c21f8652423595cf710ad108af40e77d3ae6e96b827"
 dependencies = [
  "libredox",
 ]

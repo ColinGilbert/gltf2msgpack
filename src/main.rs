@@ -1,11 +1,12 @@
 use msgpacker::prelude::*;
-use std::{cmp, fs::*, io::*};
+use std::{fs::*, io::*};
 // use std::boxed::Box;
 // use std::error::Error as StdError;
 use noobwerkz::serialized_model::*;
 
 fn traverse_node_recursive(
     node: &gltf::Node,
+    parent_transform: glam::Mat4,
     meshes: &mut Vec<SerializedMesh>,
     buffers: &Vec<gltf::buffer::Data>,
 ) {
@@ -30,8 +31,9 @@ fn traverse_node_recursive(
                     let reader = p.reader(|buffer| Some(&buffers[buffer.index()]));
                     if let Some(positions) = reader.read_positions() {
                         for p in positions {
-                            // Process vertex positions (e.g., store them in a Vec)
-                            serialized_mesh.positions.push(p);
+                            serialized_mesh.positions.push([p[0], p[1], p[2]]);
+                            // let pp = parent_transform * glam::Mat4::from_cols_array_2d(&node.transform().matrix()) * glam::Vec4::new(p[0], p[1], p[2], 1.0);
+                            //serialized_mesh.positions.push([pp[0], pp[1], pp[2]]);
                             let mut i = 0;
                             while i < 3 {
                                 let biggest: f32;
@@ -93,10 +95,11 @@ fn traverse_node_recursive(
             }
         }
         //println!("{:#?}", node.transform());
-        let decomposed = node.transform().decomposed();
-        serialized_mesh.translation = decomposed.0;
-        serialized_mesh.rotation = decomposed.1;
-        serialized_mesh.scale = decomposed.2;
+        let decomposed =parent_transform * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
+        let (scale,rot, trans) = decomposed.to_scale_rotation_translation();
+        serialized_mesh.translation = trans.into();
+        serialized_mesh.rotation = rot.into();
+        serialized_mesh.scale = scale.into();
 
         let mut dims = [0.0 as f32; 3];
         let mut i = 0;
@@ -107,9 +110,10 @@ fn traverse_node_recursive(
         serialized_mesh.dimensions = dims;
         meshes.push(serialized_mesh);
     }
+    let trans = parent_transform * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
     // Recursively visit all children
     for child in node.children() {
-        traverse_node_recursive(&child, meshes, buffers);
+        traverse_node_recursive(&child, trans, meshes, buffers);
     }
 }
 
@@ -125,8 +129,10 @@ fn run(path: &str) {
     let roots = scene.nodes();
     let mut serialized_meshes = Vec::<SerializedMesh>::new();
     let mut serialized_materials = Vec::<SerializedMaterial>::new();
+
+    //let mat = invert_x * invert_z;
     for r in roots {
-        traverse_node_recursive(&r, &mut serialized_meshes, &buffers);
+        traverse_node_recursive(&r, glam::Mat4::IDENTITY, &mut serialized_meshes, &buffers);
     }
     for mat in document.materials() {
         let mut serialized_material = SerializedMaterial::new();
@@ -137,8 +143,7 @@ fn run(path: &str) {
                 .textures()
                 .nth(pbr.texture().index())
                 .expect("Texture not found");
-            //println!("Texture name {}", texture.name().unwrap_or_default());
-            //let tex = document.textures().nth(tex_data.index()).expect("texture not found");//.ok_or("texture not found");
+        
             let img = texture.source();
             match img.source() {
                 gltf::image::Source::View { view, mime_type } => {
@@ -163,7 +168,8 @@ fn run(path: &str) {
             match image.source() {
                 gltf::image::Source::View { view, mime_type } => {
                     println!("Embedded normal texture MIME type: {}", mime_type);
-                    // let image_data = &images[source.index()].pixels;
+                    // TODO: Find out if correct
+                    let _image_data = &images[view.index()].pixels;
                 }
                 gltf::image::Source::Uri { uri, mime_type } => {
                     println!(
@@ -177,17 +183,68 @@ fn run(path: &str) {
         }
         serialized_materials.push(serialized_material);
     }
+
+    let mut joint_names = Vec::<String>::new();
+    let mut inverse_bind_matrices = Vec::new();
+    for skin in document.skins() {
+        println!("Skin name: {:?}", skin.name().unwrap());
+        if let Some(ibm_accessor) = skin.inverse_bind_matrices() {
+            inverse_bind_matrices = extract_matrices_from_accessor(&ibm_accessor, &buffers).unwrap();
+            println!("Matrices {:?}", inverse_bind_matrices);
+
+        }
+        for joint_node in skin.joints() {
+            if let Some(name) = joint_node.name() {
+                println!("  Joint (Bone) Name: {}, index: {}", name, joint_node.index());
+                joint_names.push(name.to_owned());
+            } else {
+                println!("  Joint (Bone) has no name");
+                joint_names.push(joint_node.index().to_string());
+            }
+        }
+    }
+
     let mut serialized_model = noobwerkz::serialized_model::SerializedModel::new();
     serialized_model.meshes = serialized_meshes;
     serialized_model.materials = serialized_materials;
+    serialized_model.bone_names = joint_names;
+    serialized_model.inverse_bind_matrices = inverse_bind_matrices;
+
     let mut buf = Vec::new();
-    let n = serialized_model.pack(&mut buf);
+    let _n = serialized_model.pack(&mut buf);
     let mut file = File::create("model.bin").unwrap();
     let results = file.write_all(&buf);
     match results {
-        Ok(data)=> { println!("Writing file", data)}
-        Err(e) => { println!("Error writing file: {}", e)}
+        Ok(_data) => {
+            println!("Writing file")
+        }
+        Err(e) => {
+            println!("Error writing file: {}", e)
+        }
     }
+}
+
+
+
+fn extract_matrices_from_accessor(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data]) -> anyhow::Result<Vec<[[f32; 4]; 4]>> {
+    // Ensure the accessor data is in the correct format (4x4 float matrices)
+    let view = accessor.view().ok_or(anyhow::anyhow!("Accessor has no buffer view"))?;
+    let buffer_data = &buffers[view.buffer().index()];
+    let start_offset = view.offset() + accessor.offset();
+    let stride = view.stride().unwrap_or(accessor.size());
+    let count = accessor.count();
+    
+    let mut matrices = Vec::with_capacity(count);
+    for i in 0..count {
+        let byte_offset = start_offset + i * stride;
+        let bytes = &buffer_data[byte_offset..byte_offset + 64];
+        
+        // Safety: assuming alignment and size are correct
+        let matrix: [[f32; 4]; 4] = unsafe { std::ptr::read(bytes.as_ptr() as *const _) };
+        matrices.push(matrix);
+    }
+
+    Ok(matrices)
 }
 
 fn main() {
