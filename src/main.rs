@@ -149,7 +149,7 @@ fn run(path: &str) {
                 gltf::image::Source::View { view, mime_type } => {
                     println!("Embedded diffuse texture MIME type: {}", mime_type);
                     // TODO: Find out if correct
-                    let _image_data = &images[view.index()].pixels;
+                    let _image_data = &images[img.index()].pixels;
                 }
                 gltf::image::Source::Uri { uri, mime_type } => {
                     println!(
