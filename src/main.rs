@@ -32,8 +32,10 @@ fn traverse_node_recursive(
                     if let Some(positions) = reader.read_positions() {
                         for p in positions {
                             serialized_mesh.positions.push([p[0], p[1], p[2]]);
-                            // let pp = parent_transform * glam::Mat4::from_cols_array_2d(&node.transform().matrix()) * glam::Vec4::new(p[0], p[1], p[2], 1.0);
-                            //serialized_mesh.positions.push([pp[0], pp[1], pp[2]]);
+                            // let pp = parent_transform
+                            //     * glam::Mat4::from_cols_array_2d(&node.transform().matrix())
+                            //     * glam::Vec4::new(p[0], p[1], p[2], 1.0);
+                            // serialized_mesh.positions.push([pp[0], pp[1], pp[2]]);
                             let mut i = 0;
                             while i < 3 {
                                 let biggest: f32;
@@ -95,8 +97,9 @@ fn traverse_node_recursive(
             }
         }
         //println!("{:#?}", node.transform());
-        let decomposed =parent_transform * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
-        let (scale,rot, trans) = decomposed.to_scale_rotation_translation();
+        let decomposed =
+            parent_transform * glam::Mat4::from_cols_array_2d(&node.transform().matrix());
+        let (scale, rot, trans) = decomposed.to_scale_rotation_translation();
         serialized_mesh.translation = trans.into();
         serialized_mesh.rotation = rot.into();
         serialized_mesh.scale = scale.into();
@@ -107,6 +110,8 @@ fn traverse_node_recursive(
             dims[i] = max_extents[i] - min_extents[i];
             i += 1;
         }
+        serialized_mesh.max_extents = max_extents;
+        serialized_mesh.min_extends = min_extents;
         serialized_mesh.dimensions = dims;
         meshes.push(serialized_mesh);
     }
@@ -143,9 +148,10 @@ fn run(path: &str) {
                 .textures()
                 .nth(pbr.texture().index())
                 .expect("Texture not found");
-        
+
             let img = texture.source();
             match img.source() {
+                #[allow(unused)]
                 gltf::image::Source::View { view, mime_type } => {
                     println!("Embedded diffuse texture MIME type: {}", mime_type);
                     // TODO: Find out if correct
@@ -189,13 +195,17 @@ fn run(path: &str) {
     for skin in document.skins() {
         println!("Skin name: {:?}", skin.name().unwrap());
         if let Some(ibm_accessor) = skin.inverse_bind_matrices() {
-            inverse_bind_matrices = extract_matrices_from_accessor(&ibm_accessor, &buffers).unwrap();
-            println!("Matrices {:?}", inverse_bind_matrices);
-
+            inverse_bind_matrices =
+                extract_matrices_from_accessor(&ibm_accessor, &buffers).unwrap();
+            println!("IBM Matrices {:?}", inverse_bind_matrices);
         }
         for joint_node in skin.joints() {
             if let Some(name) = joint_node.name() {
-                println!("  Joint (Bone) Name: {}, index: {}", name, joint_node.index());
+                println!(
+                    "  Joint (Bone) Name: {}, index: {}",
+                    name,
+                    joint_node.index()
+                );
                 joint_names.push(name.to_owned());
             } else {
                 println!("  Joint (Bone) has no name");
@@ -224,27 +234,36 @@ fn run(path: &str) {
     }
 }
 
-
-
-fn extract_matrices_from_accessor(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data]) -> anyhow::Result<Vec<[[f32; 4]; 4]>> {
+fn extract_matrices_from_accessor(
+    accessor: &gltf::Accessor,
+    buffers: &[gltf::buffer::Data],
+) -> anyhow::Result<Vec<[[f32; 4]; 4]>> {
     // Ensure the accessor data is in the correct format (4x4 float matrices)
-    let view = accessor.view().ok_or(anyhow::anyhow!("Accessor has no buffer view"))?;
-    let buffer_data = &buffers[view.buffer().index()];
-    let start_offset = view.offset() + accessor.offset();
-    let stride = view.stride().unwrap_or(accessor.size());
-    let count = accessor.count();
-    
-    let mut matrices = Vec::with_capacity(count);
-    for i in 0..count {
-        let byte_offset = start_offset + i * stride;
-        let bytes = &buffer_data[byte_offset..byte_offset + 64];
-        
-        // Safety: assuming alignment and size are correct
-        let matrix: [[f32; 4]; 4] = unsafe { std::ptr::read(bytes.as_ptr() as *const _) };
-        matrices.push(matrix);
-    }
+    let view = accessor
+        .view()
+        .ok_or(anyhow::anyhow!("Accessor has no buffer view"))?;
+    if accessor.data_type() == gltf::accessor::DataType::F32
+        && accessor.dimensions() == gltf::accessor::Dimensions::Mat4
+    {
+        let buffer_data = &buffers[view.buffer().index()];
+        let start_offset = view.offset() + accessor.offset();
+        let stride = view.stride().unwrap_or(accessor.size());
+        let count = accessor.count();
 
-    Ok(matrices)
+        let mut matrices = Vec::with_capacity(count);
+
+        for i in 0..count {
+            let byte_offset = start_offset + i * stride;
+            let bytes = &buffer_data[byte_offset..byte_offset + 64];
+
+            let matrix: [[f32; 4]; 4] = unsafe { std::ptr::read(bytes.as_ptr() as *const _) };
+            matrices.push(matrix);
+        }
+
+        Ok(matrices)
+    } else {
+        Err(anyhow::anyhow!("Invalid buffer format"))
+    }
 }
 
 fn main() {
