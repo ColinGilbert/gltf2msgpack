@@ -111,7 +111,7 @@ fn traverse_node_recursive(
             i += 1;
         }
         serialized_mesh.max_extents = max_extents;
-        serialized_mesh.min_extends = min_extents;
+        serialized_mesh.min_extents = min_extents;
         serialized_mesh.dimensions = dims;
         meshes.push(serialized_mesh);
     }
